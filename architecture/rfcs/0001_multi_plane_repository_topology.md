@@ -156,3 +156,4 @@ flowchart LR
 
 1. Review and ratify this high-level repository topology and lifecycle proposal.
 2. Define the functional requirements and editorial interaction models for Stages 1 through 7 prior to designing specific MCP primitives.
+3. Perform RFC review
