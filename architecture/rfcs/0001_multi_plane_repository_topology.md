@@ -80,36 +80,59 @@ Coupling editorial prose, raw research artifacts, tool source code, and deployme
 
 ---
 
-### 3.2 System Interconnect & The MCP Protocol Boundary
+### 3.2 Hexagonal Architecture & Protocol Decoupling
 
-The bridge between `editorial-content` and `editorial-engine` is governed strictly by the **Model Context Protocol (JSON-RPC 2.0)**, avoiding custom bespoke REST client code inside the writing workspace.
+To ensure sovereignty, resilience, and flexibility, `editorial-engine` is designed using the **Hexagonal Architecture (Ports & Adapters)** pattern. The system is not inherently coupled to the Model Context Protocol or to any specific LLM client; rather, the core business domain is strictly separated from external transaction protocols.
 
-#### Communication Pattern: Detached Runtime via Network MCP (SSE) or Local Stdio
-* **Network Mode (Remote/Containerized Daemon):**
-  * `editorial-ops` runs the `editorial-engine` daemon in a background container or service on port `8765`.
-  * The writer's environment (`editorial-content`) contains only a declarative client configuration file:
-    ```json
-    {
-      "mcpServers": {
-        "editorial": {
-          "url": "http://127.0.0.1:8765/sse"
-        }
-      }
-    }
-    ```
-* **Local Subprocess Mode (Self-Contained Binary):**
-  * `editorial-engine` compiles a standalone release binary (`editorial-cli`).
-  * The authoring environment launches it dynamically:
-    ```json
-    {
-      "mcpServers": {
-        "editorial": {
-          "command": "editorial-cli",
-          "args": ["mcp", "--vault", "."]
-        }
-      }
-    }
-    ```
+**Language Standardization:** Python (3.12+) is the mandatory, unified language for all core application services, library logic, linters, and protocol adapters across the `editorial-engine` repository.
+
+```mermaid
+flowchart TD
+    subgraph Clients["Clients & Execution Channels"]
+        LLM["AGY / Gemini / Claude (LLM Agents)"]
+        Human["Human Terminal / CI Pipelines / Bash"]
+        WebHook["External Webhooks / Web UIs"]
+    end
+
+    subgraph Adapters["Inbound Adapters (editorial-engine/src/adapters/)"]
+        MCPAdapter["MCP Adapter (JSON-RPC 2.0 / stdio / SSE)\nsrc/adapters/mcp/"]
+        CLIAdapter["CLI Adapter (Typer / Click CLI)\nsrc/adapters/cli/"]
+        RESTAdapter["REST API Adapter (FastAPI / OpenAPI)\nsrc/adapters/rest/"]
+    end
+
+    subgraph CoreEngine["Core Domain Engine (editorial-engine/src/core/)"]
+        Linter["Prose & Readability Linter"]
+        FactCheck["Fact Verification & Citation Engine"]
+        Research["Research Indexer & Clip Store"]
+        Publisher["Substack ProseMirror Transformer"]
+    end
+
+    LLM --> MCPAdapter
+    Human --> CLIAdapter
+    WebHook --> RESTAdapter
+
+    MCPAdapter --> CoreEngine
+    CLIAdapter --> CoreEngine
+    RESTAdapter --> CoreEngine
+```
+
+#### 1. Core Domain Layer (`editorial-engine/src/core/`)
+* Implemented in pure, framework-agnostic Python.
+* Houses 100% of the editorial logic: markdown parsing, frontmatter validation, citation cross-referencing, Vale/style linting wrappers, and Substack ProseMirror schema translations.
+* Completely free of transport dependencies (no MCP, FastAPI, or CLI framework imports).
+
+#### 2. Protocol Adapters (`editorial-engine/src/adapters/`)
+All adapters are written in Python and maintained directly inside the **`editorial-engine`** repository, exposing distinct interaction surfaces over the identical core library:
+
+* **CLI Adapter (`src/adapters/cli/`):**
+  * Provides a direct command-line interface for human authors and automated shell scripts.
+  * Allows running linters, research indexing, and publishing directly from the terminal without requiring an LLM or network connection (e.g., `editorial-cli lint drafts/essay.md`).
+* **MCP Adapter (`src/adapters/mcp/`):**
+  * Implements the Model Context Protocol (using the official Python `mcp` SDK).
+  * Exposes core functions as MCP Tools, Resources, and Prompts over `stdio` and `SSE` for AGY, Gemini, Cursor, or Claude Desktop.
+* **REST API Adapter (`src/adapters/rest/`):**
+  * Implements a standard HTTP REST service using FastAPI.
+  * Generates interactive OpenAPI 3.1 contracts (`/docs`) for programmatic webhooks, third-party microservices, or custom web dashboards.
 
 ---
 
