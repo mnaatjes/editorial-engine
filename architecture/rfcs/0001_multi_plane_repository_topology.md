@@ -16,14 +16,14 @@ authors: ["@mnaatjes"]
 
 This Request for Comments (RFC) articulates the architectural decomposition and multi-repository topology for an AI-assisted editorial and publishing platform targeting Substack and long-form technical publications. The core design decouples software engineering governance and tool source code from the authoring workspace and operational deployment environments.
 
-By formalizing the separation into three primary planes—**Tooling & Governance (`editorial-engine`)**, **Editorial & Content (`editorial-content`)**, and **Deployment & Infrastructure (`editorial-ops`)**—the system eliminates context window pollution, prevents operational secret leakage into authoring spaces, and establishes a standardized Model Context Protocol (MCP) boundary across all lifecycles.
+By formalizing the separation into three primary planes—**Tooling & Governance (`editorial-engine`)**, **Editorial & Content (`editorial-content`)**, and **Deployment & Infrastructure (`editorial-ops`)**—the system eliminates context window pollution, prevents operational secret leakage into authoring spaces, and establishes decoupled, multi-adapter integration boundaries across all lifecycles.
 
 ```mermaid
 flowchart TD
     subgraph EnginePlane["1. Platform & Tooling Plane (editorial-engine)"]
         direction TB
         Arch["architecture/ (RFCs, ADRs, SDDs, Schemas)"]
-        MCPSrc["src/ (MCP Server Implementation)"]
+        EngineSrc["src/ (Core Domain & Adapters)"]
     end
 
     subgraph ContentPlane["2. Editorial & Content Plane (editorial-content)"]
@@ -39,7 +39,7 @@ flowchart TD
         Publisher["Publishes to Target: Substack"]
     end
 
-    EnginePlane -- "Provides Tools & Protocol" --> ContentPlane
+    EnginePlane -- "Exposes Adapters (CLI, MCP, REST)" --> ContentPlane
     ContentPlane -- "Delivers Finished Draft" --> OpsPlane
     OpsPlane --> Substack["Target Platform: Substack"]
 ```
@@ -59,7 +59,7 @@ Coupling editorial prose, raw research artifacts, tool source code, and deployme
 
 * **Goals:**
   * Define strict physical and logical repository boundaries for the editorial ecosystem.
-  * Define the Model Context Protocol (MCP) interface contract connecting authoring environments to background tool execution.
+  * Define a decoupled, multi-adapter communication model (CLI, MCP, REST) connecting authoring environments to the core editorial domain.
   * Guarantee zero source code and zero operational credentials reside within the writing workspace.
   * Establish a clear 7-stage professional editorial lifecycle framework (Research $\rightarrow$ Synthesis $\rightarrow$ Outlining $\rightarrow$ Drafting $\rightarrow$ Fact-Checking $\rightarrow$ Line Editing $\rightarrow$ Packaging).
 * **Non-Goals:**
@@ -183,10 +183,10 @@ flowchart TD
 
 ---
 
-## 4. Alternatives Considered: REST API vs. MCP
+## 4. Alternatives Considered: Single-Protocol Coupling vs. Multi-Adapter Core
 
-* **Custom REST API:** Exposing traditional HTTP/REST endpoints from `editorial-engine` requires writing and maintaining custom client-side glue code, tool adapters, or curl commands inside the writer's environment. Furthermore, OpenAPI schemas must be manually updated whenever server endpoints change.
-* **Model Context Protocol (Recommended):** MCP standardizes tool capability negotiation and resource streaming over JSON-RPC 2.0. Native MCP support in modern AI clients (Antigravity, Gemini CLI, Claude, Cursor) enables dynamic runtime discovery without writing client-side boilerplate, while preserving local-first security.
+* **Option A: Protocol-Coupled Engine (Anti-Pattern):** Hardcoding the core domain logic directly into an MCP server or REST framework couples the system to a single consumer. If LLM access is interrupted, human authors cannot execute linters or staging pipelines locally.
+* **Option B: Multi-Adapter Hexagonal Core (Recommended):** Isolating the pure editorial logic in `src/core/` and implementing thin adapters (`CLI`, `MCP`, `REST`) within `editorial-engine`. This preserves human authoring sovereignty via the CLI while enabling seamless, zero-glue integration for AI agent runtimes via MCP and automated webhooks via REST.
 
 ---
 
