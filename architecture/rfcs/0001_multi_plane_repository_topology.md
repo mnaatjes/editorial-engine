@@ -78,13 +78,24 @@ Coupling editorial prose, raw research artifacts, tool source code, and deployme
 | **`editorial-content`** | Writer / Research Essayist | **Authoring & Editorial Plane** | • `research/` (Clips, PDFs, reading notes, citations).<br>• `drafts/` (Active essays, structural outlines, revision histories).<br>• `assets/` (Visual diagrams, cover images, tables).<br>• `.gemini/` (Editorial persona directives, voice guidelines).<br>• *Zero application code, zero build tools, zero deployment scripts.* |
 | **`editorial-ops`** | Systems / DevOps Operator | **Deployment & Staging Plane** | • Container and process management manifests.<br>• Secret management bindings for platform authentication.<br>• Automated collectors and delivery scripts publishing finished content to Substack. |
 
+#### 3.1.1 Explicit Resource & Responsibility Boundaries
+
+To maintain strict architectural isolation, each repository enforces an authoritative resource boundary:
+
+| Boundary Dimension | `editorial-engine` | `editorial-content` | `editorial-ops` |
+| :--- | :--- | :--- | :--- |
+| **Primary Artifacts** | Python library code, adapters, linters, schemas, test suites. | Markdown essays, raw PDF research, local notes, SVG/image assets. | Docker Compose files, systemd units, environment secret configs. |
+| **Transformation vs. Delivery** | **OWNS Transformation:** Compiles Markdown AST to Substack ProseMirror JSON. | **OWNS Creation:** Authors and edits human/AI prose drafts. | **OWNS Delivery:** Authenticates and stages compiled payloads to Substack endpoints. |
+| **Credentials & Secrets** | **ZERO:** Holds no platform credentials or cookies. | **ZERO:** Holds no platform credentials or cookies. | **EXCLUSIVE:** Manages Substack sessions, API keys, and deployment tokens. |
+| **Runtime Role** | Stateless computational engine and adapter host. | Passive workspace mounted by engine/adapters. | Process supervisor and outbound network dispatcher. |
+
 ---
 
-### 3.2 Hexagonal Architecture & Protocol Decoupling
+### 3.2 Hexagonal Architecture & Deterministic Core Tooling
 
-To ensure sovereignty, resilience, and flexibility, `editorial-engine` is designed using the **Hexagonal Architecture (Ports & Adapters)** pattern. The system is not inherently coupled to the Model Context Protocol or to any specific LLM client; rather, the core business domain is strictly separated from external transaction protocols.
+To ensure sovereignty, resilience, and operational flexibility, `editorial-engine` is designed using the **Hexagonal Architecture (Ports & Adapters)** pattern. The system is fundamentally decoupled from any single transaction protocol or LLM client.
 
-**Language Standardization:** Python (3.12+) is the mandatory, unified language for all core application services, library logic, linters, and protocol adapters across the `editorial-engine` repository.
+**Language Standardization:** Python (3.12+) is the mandatory language for all core application services, library logic, deterministic linters, and protocol adapters across `editorial-engine`.
 
 ```mermaid
 flowchart TD
@@ -101,10 +112,30 @@ flowchart TD
     end
 
     subgraph CoreEngine["Core Domain Engine (editorial-engine/src/core/)"]
-        Linter["Prose & Readability Linter"]
-        FactCheck["Fact Verification & Citation Engine"]
-        Research["Research Indexer & Clip Store"]
-        Publisher["Substack ProseMirror Transformer"]
+        direction TB
+        subgraph ModLibrarian["1. Security, Librarian & Search"]
+            FS["Filesystem Governor (Chroot Sandbox)"]
+            Bib["Citation & BibTeX Resolver (pybtex)"]
+            Search["Embedded Research Index (SQLite FTS5)"]
+            Doc["Document Extractors (pypdf, pdfplumber)"]
+        end
+
+        subgraph ModLinters["2. Deterministic Prose & Style Analytics"]
+            Stats["Readability Metrics (textstat: Flesch-Kincaid, Gunning Fog)"]
+            Style["Prose Linter & Cliché Engine (Vale wrapper, proselint)"]
+            Passive["Voice & Rhythm Analyzer (AST-level passive voice hunter)"]
+        end
+
+        subgraph ModHygiene["3. Verification & Draft Hygiene"]
+            TK["Placeholder & [TK] Sentinel Checker"]
+            Typo["Typography Normalizer (Curly quotes, em-dashes)"]
+            Links["Dead Link & Reference Verifier"]
+        end
+
+        subgraph ModCompiler["4. AST Compilation"]
+            AST["Markdown AST Parser (markdown-it-py)"]
+            ProseMirror["ProseMirror AST Transformer (Target Schema)"]
+        end
     end
 
     LLM --> MCPAdapter
@@ -116,23 +147,29 @@ flowchart TD
     RESTAdapter --> CoreEngine
 ```
 
-#### 1. Core Domain Layer (`editorial-engine/src/core/`)
-* Implemented in pure, framework-agnostic Python.
-* Houses 100% of the editorial logic: markdown parsing, frontmatter validation, citation cross-referencing, Vale/style linting wrappers, and Substack ProseMirror schema translations.
-* Completely free of transport dependencies (no MCP, FastAPI, or CLI framework imports).
+#### 1. Core Domain Sub-Modules (`editorial-engine/src/core/`)
+Implemented in pure, framework-agnostic Python without external network or transport dependencies:
+
+* **Security & Librarian (`src/core/librarian/` & `src/core/security/`):**
+  * *Filesystem Governor:* Enforces a strict virtual sandbox, ensuring file operations cannot escape the configured publication root.
+  * *Research Indexer & Doc Extractors:* Deterministically extracts clean text and data tables from PDFs/EPUBs (`pypdf`, `pdfplumber`) and builds an embedded, zero-cloud keyword search index via SQLite FTS5.
+  * *Citation Resolver:* Validates citation keys against BibTeX/CSL archives (`pybtex`).
+* **Deterministic Prose & Style Analytics (`src/core/analysis/`):**
+  * *Readability Metrics:* Real-time statistical analysis using `textstat` (Flesch Reading Ease, Flesch-Kincaid Grade Level, Lexical Diversity).
+  * *Style & Cliché Linting:* Programmatic integration of Vale rules and `proselint` to enforce house style guidelines, flagging corporate jargon and redundant phrasing.
+  * *Voice & Cadence:* AST-level pattern matching identifying excessive passive voice, adverb density, and monotonous sentence lengths.
+* **Verification & Draft Hygiene (`src/core/hygiene/`):**
+  * *`[TK]` Sentinel Verifier:* Scans drafts to guarantee zero unfulfilled `[TK]` placeholders or broken section links prior to publication.
+  * *Typography Normalizer:* Automatically converts straight quotes to smart/curly quotes, standardizes em-dashes (`---` $\rightarrow$ `—`), and eliminates non-standard whitespace.
+* **AST Compilation (`src/core/transformers/`):**
+  * *ProseMirror Compiler:* Parses Markdown into a semantic AST (`markdown-it-py`) and translates it deterministically into Substack's native ProseMirror JSON document schema.
 
 #### 2. Protocol Adapters (`editorial-engine/src/adapters/`)
-All adapters are written in Python and maintained directly inside the **`editorial-engine`** repository, exposing distinct interaction surfaces over the identical core library:
+All adapters are written in Python and maintained directly inside `editorial-engine`, exposing distinct interaction surfaces over the identical core library:
 
-* **CLI Adapter (`src/adapters/cli/`):**
-  * Provides a direct command-line interface for human authors and automated shell scripts.
-  * Allows running linters, research indexing, and publishing directly from the terminal without requiring an LLM or network connection (e.g., `editorial-cli lint drafts/essay.md`).
-* **MCP Adapter (`src/adapters/mcp/`):**
-  * Implements the Model Context Protocol (using the official Python `mcp` SDK).
-  * Exposes core functions as MCP Tools, Resources, and Prompts over `stdio` and `SSE` for AGY, Gemini, Cursor, or Claude Desktop.
-* **REST API Adapter (`src/adapters/rest/`):**
-  * Implements a standard HTTP REST service using FastAPI.
-  * Generates interactive OpenAPI 3.1 contracts (`/docs`) for programmatic webhooks, third-party microservices, or custom web dashboards.
+* **CLI Adapter (`src/adapters/cli/`):** Provides a direct command-line interface for human authors and automated shell scripts (e.g., `editorial-cli lint drafts/essay.md`).
+* **MCP Adapter (`src/adapters/mcp/`):** Exposes core functions as MCP Tools, Resources, and Prompts over `stdio` and `SSE` for AGY, Gemini, Cursor, or Claude Desktop.
+* **REST API Adapter (`src/adapters/rest/`):** Implements a standard HTTP REST service using FastAPI, generating interactive OpenAPI 3.1 contracts (`/docs`) for programmatic webhooks or web dashboards.
 
 ---
 
