@@ -73,21 +73,32 @@ Without an explicit structural contract, authoring repositories degenerate into 
 
 ## 3. Directory Topography & Layout
 
-The directory structure of `editorial-content` is intentionally kept flat (maximum depth of 2 levels) to eliminate filing friction and simplify path resolution. It contains strictly pure content and assets, with zero agent prompt or configuration directories:
+The directory structure of `editorial-content` is intentionally kept flat (maximum depth of 2 levels) to eliminate filing friction and simplify path resolution. It contains strictly pure content and assets, with zero agent prompt or configuration directories.
+
+To accommodate complex issues that cannot be composed into a single draft, `drafts/` supports two structural forms:
+1. **Standalone Drafts:** Flat Markdown files (`drafts/YYYY-MM-DD_slug.md`).
+2. **Single-Level Series Bundles:** A dedicated directory (`drafts/YYYY-MM-DD_series-slug/`) containing partitioned part files and an optional `series.yaml` outline.
 
 ```text
 editorial-content/
-├── drafts/                        # All long-form essays and publications
-│   ├── 2026-09-27_sample-post.md  # ISO-dated slugged drafts
+├── drafts/                                # All long-form essays and publications
+│   ├── 2026-09-27_standalone-post.md     # Pattern 1: Standalone post
+│   ├── 2026-10-01_distributed-consensus/ # Pattern 2: Single-level series bundle folder
+│   │   ├── series.yaml                    # Master series outline & publication schedule
+│   │   ├── part-1_raft-basics.md          # Chapter / part draft
+│   │   └── part-2_log-compaction.md       # Chapter / part draft
 │   └── ...
-├── research/                      # Ingested primary sources & synthesis notes
-│   ├── notes/                     # Normalized CommonMark research summaries
+├── research/                              # Ingested primary sources & synthesis notes
+│   ├── notes/                             # Normalized CommonMark research summaries
 │   │   └── attention-paper.md
-│   └── bibliography.bib           # Optional master BibTeX citation register
-└── assets/                        # Static visual media referenced by drafts
-    └── 2026-09-27_sample-post/    # Asset folder scoped per article
-        ├── banner.png             # 16:9 publication cover image
-        └── figure-1.svg           # Inline architecture diagram
+│   └── bibliography.bib                   # Optional master BibTeX citation register
+└── assets/                                # Static visual media referenced by drafts
+    ├── 2026-09-27_standalone-post/        # Asset folder scoped per standalone article
+    │   ├── banner.png                     # 16:9 publication cover image
+    │   └── figure-1.svg                   # Inline architecture diagram
+    └── 2026-10-01_distributed-consensus/  # Asset folder scoped per series bundle
+        ├── part-1_figure.svg
+        └── part-2_figure.svg
 ```
 
 > **Directives Boundary Note:** AI behavioral rules, style guidelines, and persona prompts do not reside in `editorial-content`. They are centrally maintained in `editorial-engine` and streamed into the authoring session dynamically via the MCP adapter (using MCP Prompts and Resources).
@@ -98,7 +109,7 @@ editorial-content/
 
 All content within `editorial-content` consists of UTF-8 CommonMark Markdown with mandatory YAML frontmatter.
 
-### 4.1 Draft Document Contract (`drafts/*.md`)
+### 4.1 Draft Document Contract (`drafts/*.md` or `drafts/*/*.md`)
 
 Every essay or article must begin with the standard `DraftDocument` frontmatter header:
 
@@ -112,7 +123,12 @@ last_updated_at: "YYYY-MM-DD"
 target: "substack"
 tags: ["systems", "architecture"]
 summary: "Single-sentence executive summary or email pre-header."
-cover_image: "../assets/2026-09-27_sample-post/banner.png"
+cover_image: "../assets/2026-09-27_standalone-post/banner.png"
+series: # Optional: Used when part of a multi-part series or chaptered bundle
+  id: "distributed-consensus"
+  title: "Deconstructing Distributed Consensus"
+  part: 1
+  total_parts: 2 # optional or open-ended
 citations:
   - key: "vaswani2017"
     source: "research/notes/attention-paper.md"

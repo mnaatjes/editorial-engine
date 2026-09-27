@@ -4,7 +4,7 @@ tags: ["rfc", "architecture", "editorial", "mcp", "topology"]
 created_at: "2026-09-27"
 last_updated_at: "2026-09-27"
 rfc_id: "0001"
-status: "under_review"
+status: "approved"
 level: "parent"
 parent_rfc: null
 authors: ["@mnaatjes"]
