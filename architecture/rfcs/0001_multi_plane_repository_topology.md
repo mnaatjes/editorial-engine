@@ -23,28 +23,25 @@ flowchart TD
     subgraph EnginePlane["1. Platform & Tooling Plane (editorial-engine)"]
         direction TB
         Arch["architecture/ (RFCs, ADRs, SDDs, Schemas)"]
-        MCPSrc["src/ (MCP Server, Linters, Substack Bridge)"]
-        CI["CI/CD: Builds OCI Images & Binaries"]
+        MCPSrc["src/ (MCP Server Implementation)"]
     end
 
     subgraph ContentPlane["2. Editorial & Content Plane (editorial-content)"]
         direction TB
-        Research["research/ (Clips, PDFs, Bibliographies)"]
+        Research["research/ (Clips, PDFs, Notes)"]
         Drafts["drafts/ (Markdown Essays, Frontmatter)"]
         WProfile[".gemini/ (Editorial Persona Rules, Voice)"]
     end
 
-    subgraph OpsPlane["3. Operational & Staging Plane (editorial-ops)"]
+    subgraph OpsPlane["3. Operational & Publishing Plane (editorial-ops)"]
         direction TB
-        Compose["docker-compose.yaml / Systemd Units"]
-        Secrets["Secret Store (Substack Auth, Browser Profiles)"]
-        Runners["Staging Runners & Webhook Dispatchers"]
+        Collector["Ingests Finished Assets & Drafts"]
+        Publisher["Publishes to Target: Substack"]
     end
 
-    EnginePlane -- "Publishes OCI Image / Binary" --> Artifacts[("Artifact Registry / Local Cache")]
-    Artifacts -- "Deploys Service / Container" --> OpsPlane
-    ContentPlane <-- "JSON-RPC (stdio / SSE MCP)" --> OpsPlane
-    OpsPlane -- "ProseMirror Staging / CDN Sync" --> Substack["Substack / Target CDN"]
+    EnginePlane -- "Provides Tools & Protocol" --> ContentPlane
+    ContentPlane -- "Delivers Finished Draft" --> OpsPlane
+    OpsPlane --> Substack["Target Platform: Substack"]
 ```
 
 ---
@@ -64,7 +61,7 @@ Coupling editorial prose, raw research artifacts, tool source code, and deployme
   * Define strict physical and logical repository boundaries for the editorial ecosystem.
   * Define the Model Context Protocol (MCP) interface contract connecting authoring environments to background tool execution.
   * Guarantee zero source code and zero operational credentials reside within the writing workspace.
-  * Support the complete 7-stage professional editorial lifecycle (Research $\rightarrow$ Synthesis $\rightarrow$ Outlining $\rightarrow$ Drafting $\rightarrow$ Fact-Checking $\rightarrow$ Line Editing $\rightarrow$ Packaging).
+  * Establish a clear 7-stage professional editorial lifecycle framework (Research $\rightarrow$ Synthesis $\rightarrow$ Outlining $\rightarrow$ Drafting $\rightarrow$ Fact-Checking $\rightarrow$ Line Editing $\rightarrow$ Packaging).
 * **Non-Goals:**
   * Re-implementing a native Markdown editor (the system integrates with existing editors via standard MCP clients).
   * Supporting multi-tenant collaborative SaaS drafting in phase 1 (focused on single-author sovereign homelab workflow).
@@ -77,9 +74,9 @@ Coupling editorial prose, raw research artifacts, tool source code, and deployme
 
 | Repository Name | Target Persona | Plane / Responsibility | Authoritative Contents |
 | :--- | :--- | :--- | :--- |
-| **`editorial-engine`** | Software Engineer / System Architect | **Governance & Source Code Plane** | • `architecture/` (RFCs, MADRs, IEEE 1016 SDDs, OpenAPI/JSON-RPC schemas).<br>• Core source code for custom MCP servers (`src/mcp_server/`).<br>• Custom linter definitions, style rule engines (Vale rules), and readability evaluators.<br>• Unit, integration, and contract tests.<br>• CI/CD packaging pipelines (Containerfiles, binary builds). |
+| **`editorial-engine`** | Software Engineer / System Architect | **Governance & Source Code Plane** | • `architecture/` (RFCs, MADRs, IEEE 1016 SDDs, OpenAPI/JSON-RPC schemas).<br>• Core source code for custom MCP servers (`src/`).<br>• Custom linter definitions, style rule engines, and readability evaluators.<br>• Unit, integration, and contract tests. |
 | **`editorial-content`** | Writer / Research Essayist | **Authoring & Editorial Plane** | • `research/` (Clips, PDFs, reading notes, citations).<br>• `drafts/` (Active essays, structural outlines, revision histories).<br>• `assets/` (Visual diagrams, cover images, tables).<br>• `.gemini/` (Editorial persona directives, voice guidelines).<br>• *Zero application code, zero build tools, zero deployment scripts.* |
-| **`editorial-ops`** | Systems / DevOps Operator | **Deployment & Staging Plane** | • Container deployment manifests (`docker-compose.yaml`).<br>• Secret management bindings (Substack credentials, browser state sessions).<br>• Host-level execution definitions (systemd user services, cron jobs).<br>• End-to-end publishing runners and webhooks. |
+| **`editorial-ops`** | Systems / DevOps Operator | **Deployment & Staging Plane** | • Container and process management manifests.<br>• Secret management bindings for platform authentication.<br>• Automated collectors and delivery scripts publishing finished content to Substack. |
 
 ---
 
@@ -88,8 +85,8 @@ Coupling editorial prose, raw research artifacts, tool source code, and deployme
 The bridge between `editorial-content` and `editorial-engine` is governed strictly by the **Model Context Protocol (JSON-RPC 2.0)**, avoiding custom bespoke REST client code inside the writing workspace.
 
 #### Communication Pattern: Detached Runtime via Network MCP (SSE) or Local Stdio
-* **Network Mode (Recommended for Server / Headless Container):**
-  * `editorial-ops` runs the `editorial-engine` daemon in a local container or systemd service on port `8765`.
+* **Network Mode (Remote/Containerized Daemon):**
+  * `editorial-ops` runs the `editorial-engine` daemon in a background container or service on port `8765`.
   * The writer's environment (`editorial-content`) contains only a declarative client configuration file:
     ```json
     {
@@ -100,8 +97,8 @@ The bridge between `editorial-content` and `editorial-engine` is governed strict
       }
     }
     ```
-* **Local Subprocess Mode (Self-Contained Single Binary):**
-  * `editorial-engine` compiles an immutable release binary (`editorial-cli`).
+* **Local Subprocess Mode (Self-Contained Binary):**
+  * `editorial-engine` compiles a standalone release binary (`editorial-cli`).
   * The authoring environment launches it dynamically:
     ```json
     {
@@ -116,80 +113,46 @@ The bridge between `editorial-content` and `editorial-engine` is governed strict
 
 ---
 
-### 3.3 Functional Mapping of the 7-Stage Editorial Lifecycle
+### 3.3 The 7-Stage Editorial and Authoring Lifecycle
 
-The `editorial-engine` exposes standardized MCP Tools, Resources, and Prompts mapped directly to the professional editorial workflow:
+From a professional non-fiction writer and technical essayist perspective, content production is structured into seven discrete, sequential stages:
 
 ```mermaid
 flowchart LR
-    S1["1. Research"] --> S2["2. Synthesis"]
-    S2 --> S3["3. Outlining"]
-    S3 --> S4["4. Drafting"]
-    S4 --> S5["5. Verification"]
-    S5 --> S6["6. Line Edit"]
+    S1["1. Ingestion & Research"] --> S2["2. Sensemaking & Synthesis"]
+    S2 --> S3["3. Thesis & Outlining"]
+    S3 --> S4["4. The Zero Draft"]
+    S4 --> S5["5. Fact-Checking"]
+    S5 --> S6["6. Multi-Pass Line Editing"]
     S6 --> S7["7. Packaging & Staging"]
-
-    subgraph MCPCapabilities["MCP Primitives (editorial-engine)"]
-        direction TB
-        T1["Tools: research_index(), url_clip()"]
-        T2["Resources: resource://research/briefs/*"]
-        T3["Prompts: prompt://pyramid_outline"]
-        T4["Tools: generate_draft_section()"]
-        T5["Tools: fact_check_claims()"]
-        T6["Tools: run_prose_linter()"]
-        T7["Tools: stage_to_substack()"]
-    end
-
-    S1 -.-> T1
-    S2 -.-> T2
-    S3 -.-> T3
-    S4 -.-> T4
-    S5 -.-> T5
-    S6 -.-> T6
-    S7 -.-> T7
 ```
 
-1. **Stage 1: Ingestion & Research:** Tool `research_query(query)` parses local Markdown notes and retrieves cited PDFs.
-2. **Stage 2: Synthesis:** Resource `resource://research/synthesis_matrix` exposes extracted claims and counter-arguments as read-only context.
-3. **Stage 3: Thesis & Outlining:** Prompt `prompt://structural_outline` enforces the Minto Pyramid Principle without generating conversational filler.
-4. **Stage 4: Drafting:** Contextual generation expanding bullet outlines into prose while preserving `[TK]` verification placeholders.
-5. **Stage 5: Fact-Checking:** Tool `verify_assertions(file_path)` cross-references draft claims against source documents in `research/`.
-6. **Stage 6: Multi-Pass Line Editing:** Tool `lint_prose(file_path)` executes Vale and readability metrics (Flesch-Kincaid, passive voice density) with granular line-level feedback.
-7. **Stage 7: Packaging & Staging:** Tool `stage_draft(file_path)` translates local Markdown into ProseMirror JSON and stages a draft in Substack via `editorial-ops` automation.
+1. **Stage 1: Ingestion & Research:** Systematic capture of primary source materials, academic publications, whitepapers, interview transcripts, and bookmarks into local archives.
+2. **Stage 2: Sensemaking & Synthesis:** Extracting core patterns, claims, tensions, and verified data points from research materials into a structured research brief without drafting prose.
+3. **Stage 3: Thesis Formulation & Outlining:** Establishing the central thesis statement (governing thought) and building a detailed hierarchical outline (e.g., Minto Pyramid structure) mapping arguments to citations.
+4. **Stage 4: Drafting (The Zero Draft):** Rapid, unconstrained translation of the outline into full prose, deliberately bypassing internal self-critique and using placeholders (`[TK]`) for missing data to preserve velocity.
+5. **Stage 5: Fact-Checking & Verification:** Rigorous verification pass resolving all `[TK]` placeholders, validating claims against primary sources, and verifying numerical accuracy.
+6. **Stage 6: Multi-Pass Line Editing:** Progressive editorial passes refining voice, cadence, clarity, and grammatical hygiene (structural flow $\rightarrow$ line editing $\rightarrow$ copyediting/proofreading).
+7. **Stage 7: Packaging & Staging:** Assembly of publication-ready assets including headlines, email pre-headers, pull quotes, 16:9 banner art, and social hooks prior to handing off to operations for publishing.
 
 ---
 
-## 4. Alternatives Considered & Trade-Off Matrix
+## 4. Alternatives Considered: REST API vs. MCP
 
-| Architectural Dimension | Option A: Monorepo Architecture | Option B: Custom REST API Service | Option C: Multi-Plane Decoupled Topology with MCP (Recommended) |
-| :--- | :--- | :--- | :--- |
-| **Workspace Hygiene** | Poor: Code, node modules, and essays coexist in one Git tree. | Moderate: Content is separate, but requires custom client scripts. | **Excellent**: Content repository holds only Markdown and media assets. |
-| **Context Window Consumption** | High: LLM indexing pulls infrastructure code into drafting sessions. | Minimal: Only queries specific API endpoints. | **Optimal**: LLM discovers tools via JSON-RPC schema without scanning source trees. |
-| **Client Maintenance Overhead** | High: Every environment update requires rebuilding workspace hooks. | High: Must maintain custom curl/Python API clients in the writer's editor. | **Zero**: Uses native MCP client integrations built into AGY, Claude, and Cursor. |
-| **Credential Security** | Low: Production publishing keys stored alongside working drafts. | Good: API acts as a gateway to credentials. | **Complete**: Credentials isolated strictly within the `editorial-ops` execution plane. |
-| **Tool Portability** | None: Hardcoded to the single repository directory. | Moderate: Reusable, but requires custom API client setup per repo. | **Universal**: Any Markdown workspace can mount the engine via `.gemini/antigravity.json`. |
+* **Custom REST API:** Exposing traditional HTTP/REST endpoints from `editorial-engine` requires writing and maintaining custom client-side glue code, tool adapters, or curl commands inside the writer's environment. Furthermore, OpenAPI schemas must be manually updated whenever server endpoints change.
+* **Model Context Protocol (Recommended):** MCP standardizes tool capability negotiation and resource streaming over JSON-RPC 2.0. Native MCP support in modern AI clients (Antigravity, Gemini CLI, Claude, Cursor) enables dynamic runtime discovery without writing client-side boilerplate, while preserving local-first security.
 
 ---
 
 ## 5. Security, Risk & Operational Impact
 
-* **Secret Isolation:** Substack session tokens, session cookies, and API secrets are never checked into `editorial-content` or exposed to the client LLM context. They are injected as environment variables exclusively inside the container managed by `editorial-ops`.
-* **Filesystem Containment:** In network mode, `editorial-engine` operates only on paths explicitly mounted into the service container. Path traversal outside the configured publication root is rejected at the protocol layer.
-* **Failure Modes:** If `editorial-engine` crashes or is offline, the writer's ability to author, review, or edit local Markdown files remains completely unimpeded; only AI tool augmentation is temporarily unavailable.
+* **Secret Isolation:** Substack session tokens, session cookies, and API secrets are never checked into `editorial-content` or exposed to the client LLM context. They are managed exclusively within the operational plane (`editorial-ops`).
+* **Filesystem Containment:** `editorial-engine` operates only on paths explicitly designated for authoring. Path traversal outside the configured publication root is rejected.
+* **Failure Modes:** If `editorial-engine` is offline, the writer's ability to author, review, or edit local Markdown files remains completely functional; only AI assistance is temporarily unavailable.
 
 ---
 
-## 6. Implementation Phases & Downstream Artifacts
+## 6. Next Steps
 
-1. **Phase 1: Inception & Consensus (This RFC)**
-   * Complete RFC review and ratify boundary decisions.
-   * Author binding MADR: `architecture/adr/0001_mcp_editorial_protocol_boundary.md`.
-2. **Phase 2: Protocol Interface Specification**
-   * Author OpenAPI/JSON-RPC schema contract: `architecture/api/editorial_mcp_contract.json`.
-3. **Phase 3: Core Implementation (`editorial-engine`)**
-   * Implement MCP server exposing the 7-stage editorial tools.
-   * Build container packaging.
-4. **Phase 4: Operational Staging (`editorial-ops`)**
-   * Configure Docker Compose deployment and headless Substack staging bridge.
-5. **Phase 5: Content Workspace Initialization (`editorial-content`)**
-   * Setup pure Markdown directory layout and configure `.gemini/antigravity.json`.
+1. Review and ratify this high-level repository topology and lifecycle proposal.
+2. Define the functional requirements and editorial interaction models for Stages 1 through 7 prior to designing specific MCP primitives.
