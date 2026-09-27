@@ -113,21 +113,44 @@ The bridge between `editorial-content` and `editorial-engine` is governed strict
 
 ---
 
-### 3.3 The 7-Stage Editorial and Authoring Lifecycle
+### 3.3 The 7-Stage Editorial Lifecycle: Two Operating Modes
 
-From a professional non-fiction writer and technical essayist perspective, content production is structured into seven discrete, sequential stages:
+Rather than an inflexible waterfall sequence, the editorial and authoring workflow operates in two distinct operational modes separated by a formal **Convergence Gate**:
+
+* **Mode 1: The Discovery Engine (Iterative / Recursive):** Stages 1 through 4 are inherently dialectical and non-linear. An initial premise prompts research, which informs synthesis, which refines the thesis, exposing logic gaps that trigger targeted research spikes.
+* **Mode 2: The Publishing Factory (Deterministic / Linear):** Stages 5 through 7 engage once the structural argument is frozen. Work shifts from creative discovery to mechanical verification, stylistic polishing, and asset compilation.
 
 ```mermaid
-flowchart LR
-    S1["1. Ingestion & Research"] --> S2["2. Sensemaking & Synthesis"]
-    S2 --> S3["3. Thesis & Outlining"]
-    S3 --> S4["4. The Zero Draft"]
-    S4 --> S5["5. Fact-Checking"]
-    S5 --> S6["6. Multi-Pass Line Editing"]
-    S6 --> S7["7. Packaging & Staging"]
+flowchart TD
+    subgraph Mode1["Mode 1: The Discovery Engine (Iterative Loop)"]
+        direction TB
+        Idea["Initial Premise / Spark"] --> S1["1. Ingestion & Research (Time-Boxed)"]
+        S1 <--> S2["2. Sensemaking & Synthesis"]
+        S2 <--> S3["3. Thesis Formulation & Outlining"]
+        S3 -. "Uncovered Logic Gap" .-> S1
+        S3 --> S4["4. Drafting (The Zero Draft)"]
+        S4 -. "Structural Breakdown" .-> S3
+    end
+
+    subgraph Gate["The Convergence Gate"]
+        direction TB
+        Freeze["Argument & Structure Frozen\n(Ban Unbounded Research)"]
+    end
+
+    subgraph Mode2["Mode 2: The Publishing Factory (Linear Pipeline)"]
+        direction TB
+        S5["5. Fact-Checking & Verification"] --> S6["6. Multi-Pass Line Editing"]
+        S6 --> S7["7. Packaging & Staging"]
+    end
+
+    Mode1 --> Gate
+    Gate --> Mode2
 ```
 
+#### Detailed Stage Breakdown
+
 1. **Stage 1: Ingestion & Research:** Systematic capture of primary source materials, academic publications, whitepapers, interview transcripts, and bookmarks into local archives.
+   * *Requirement: Time-Boxed Research Spikes:* To prevent the "infinite research spiral" anti-pattern, research phases must operate under explicit time bounds or bounded scopes (e.g., investigating a specific counter-argument for a fixed window before advancing).
 2. **Stage 2: Sensemaking & Synthesis:** Extracting core patterns, claims, tensions, and verified data points from research materials into a structured research brief without drafting prose.
 3. **Stage 3: Thesis Formulation & Outlining:** Establishing the central thesis statement (governing thought) and building a detailed hierarchical outline (e.g., Minto Pyramid structure) mapping arguments to citations.
 4. **Stage 4: Drafting (The Zero Draft):** Rapid, unconstrained translation of the outline into full prose, deliberately bypassing internal self-critique and using placeholders (`[TK]`) for missing data to preserve velocity.
