@@ -91,7 +91,8 @@ editorial-content/
 ├── research/                              # Ingested primary sources & synthesis notes
 │   ├── notes/                             # Normalized CommonMark research summaries
 │   │   └── attention-paper.md
-│   └── bibliography.bib                   # Optional master BibTeX citation register
+│   ├── bibliography.bib                   # Optional master BibTeX citation register
+│   └── glossary.yaml                      # Publication-wide controlled lexicon & terminology
 └── assets/                                # Static visual media referenced by drafts
     ├── 2026-09-27_standalone-post/        # Asset folder scoped per standalone article
     │   ├── banner.png                     # 16:9 publication cover image
@@ -185,6 +186,42 @@ tags: ["transformer", "deep-learning"]
 | :--- | :--- | :--- |
 | BLEU Score | 28.4 | 41.8 |
 ```
+
+---
+
+### 4.3 Glossary & Controlled Lexicon Contract (`research/glossary.yaml`)
+
+To eliminate "synonym drift" (e.g., using *worker node*, *agent*, and *replica* inconsistently across issues) and preserve terminology precision throughout the publication, repository-wide concepts are defined in `research/glossary.yaml`:
+
+```yaml
+---
+# Publication Controlled Lexicon
+version: "1.0.0"
+last_updated: "YYYY-MM-DD"
+---
+terms:
+  - term: "Consensus Engine"
+    slug: "consensus-engine"
+    definition: "The core state-machine replication subsystem responsible for leader election and log synchronization."
+    preferred_usage: "Consensus Engine"
+    forbidden_variants:
+      - "consensus manager"
+      - "voting master"
+      - "sync daemon"
+    citation: "research/notes/raft-paper.md" # Provenance source
+    tags: ["distributed-systems", "core"]
+```
+
+#### Lifecycle & Editorial Phase Integration
+
+1. **Discovery & Definition (Stages 1–3):**
+   * *Writer Trigger:* When reading source literature or drafting an outline, the author encounters an overloaded or technical term.
+   * *Action:* The writer conducts a time-boxed research spike, extracts the authoritative definition, and registers it in `research/glossary.yaml`.
+2. **Deterministic Enforcement (Stage 6: Multi-Pass Line Editing):**
+   * During Stage 6 line-editing, `editorial-engine`'s Prose Linter (`src/core/analysis/`) loads `research/glossary.yaml`.
+   * **Forbidden Variant Linting:** Scans the draft AST for any registered `forbidden_variants` and raises warnings with automated replacement suggestions.
+   * **First-Mention Definition Linking:** Identifies the first occurrence of a defined glossary term in an essay, suggesting an inline definition, tooltip, or footnote for reader clarity.
+   * **Capitalization Hygiene:** Enforces casing consistency (e.g., flagging `ebpf` or `Ebpf` when `eBPF` is the preferred usage).
 
 ---
 
