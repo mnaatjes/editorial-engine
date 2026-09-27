@@ -4,7 +4,7 @@ tags: ["rfc", "architecture", "editorial-content", "filesystem", "schema"]
 created_at: "2026-09-27"
 last_updated_at: "2026-09-27"
 rfc_id: "0002"
-status: "under_review"
+status: "approved"
 level: "child"
 parent_rfc: "0001"
 authors: ["@mnaatjes"]
