@@ -28,7 +28,6 @@ flowchart TD
             D["drafts/ (Active & Published Essays)"]
             R["research/ (Notes & Bibliographies)"]
             A["assets/ (Images, SVGs, Figures)"]
-            G[".gemini/ (Workspace Persona & Directives)"]
         end
         
         subgraph Schemas["Document Schemas"]
@@ -40,11 +39,13 @@ flowchart TD
         R --- RSchema
     end
 
-    subgraph Consumer["editorial-engine (Filesystem Governor)"]
+    subgraph Consumer["editorial-engine (Filesystem Governor & Rules Engine)"]
         Gov["Chroot Sandbox & Path Validator"]
+        Rules["Centralized House Rules & Voice Personas\n(Injected dynamically via MCP Prompts/Resources)"]
     end
 
     Gov -- "Mounts POSIX Root" --> VaultRoot
+    Rules -. "Guides Agent Sessions" .-> VaultRoot
 ```
 
 ---
@@ -63,6 +64,7 @@ Without an explicit structural contract, authoring repositories degenerate into 
   * Establish strict, machine-readable YAML frontmatter contracts for drafts and research notes.
   * Define explicit filesystem policies (naming conventions, encoding, immutability, asset linking).
   * Register anti-patterns to prevent architectural creep into the content plane.
+  * Guarantee zero AI configuration/rules directories (e.g., `.gemini/`) reside in the content vault; behavioral directives are centralized in `editorial-engine`.
 * **Non-Goals:**
   * Define the internal database schema of `editorial-engine` (e.g., SQLite FTS5 index tables).
   * Specify automated publishing or deployment scripts (isolated strictly to `editorial-ops`).
@@ -71,13 +73,10 @@ Without an explicit structural contract, authoring repositories degenerate into 
 
 ## 3. Directory Topography & Layout
 
-The directory structure of `editorial-content` is intentionally kept flat (maximum depth of 2 levels) to eliminate filing friction and simplify path resolution:
+The directory structure of `editorial-content` is intentionally kept flat (maximum depth of 2 levels) to eliminate filing friction and simplify path resolution. It contains strictly pure content and assets, with zero agent prompt or configuration directories:
 
 ```text
 editorial-content/
-├── .gemini/                       # Workspace directives & style prompts
-│   ├── rules/                     # Active agent behavioral rules (e.g., voice, tone)
-│   └── antigravity.json           # Declarative MCP connection configuration
 ├── drafts/                        # All long-form essays and publications
 │   ├── 2026-09-27_sample-post.md  # ISO-dated slugged drafts
 │   └── ...
@@ -90,6 +89,8 @@ editorial-content/
         ├── banner.png             # 16:9 publication cover image
         └── figure-1.svg           # Inline architecture diagram
 ```
+
+> **Directives Boundary Note:** AI behavioral rules, style guidelines, and persona prompts do not reside in `editorial-content`. They are centrally maintained in `editorial-engine` and streamed into the authoring session dynamically via the MCP adapter (using MCP Prompts and Resources).
 
 ---
 
@@ -194,6 +195,7 @@ To preserve system longevity, the following anti-patterns are explicitly registe
 | **3. The Shared State / Database Leak Anti-Pattern** | Storing database files (`index.db`), lock files, or temporary cache directories inside `editorial-content`. | **Enforce stateless vault:** All caches and SQLite indices belong in `editorial-engine/.cache/` or system temp spaces. |
 | **4. The Secret Leakage Anti-Pattern** | Storing Substack session cookies, API tokens, or credentials in draft frontmatter or environment files in the vault. | **Enforce zero credentials:** `editorial-content` has zero secrets. Credentials reside strictly in `editorial-ops`. |
 | **5. The Split-Brain Workspace Anti-Pattern** | Mixing application development notes or infrastructure runbooks with publication content. | **Enforce pure editorial focus:** Ops documentation lives in `homelab-ops` or `editorial-ops`. Only public/publication content lives here. |
+| **6. The Agent Config Leakage Anti-Pattern** | Committing agent prompt engineering files or rule folders (`.gemini/`, `.cursor/`, prompt text) into the content repository. | **Enforce centralized rule governance:** Behavioral prompts and rules reside in `editorial-engine` and are injected dynamically via MCP. |
 
 ---
 
